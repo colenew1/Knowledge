@@ -18,6 +18,9 @@
 import { db } from '@/lib/supabase';
 import { detectStructure } from '@/lib/structure/detect';
 import { extractAllQuestions, partitionQuestions } from '@/lib/structure/extract';
+// partitionQuestions is used below to pick out the unanswered rows at
+// generate-time; the full list (including pre-answered rows) is what gets
+// stored on the job so the review UI can show the whole sheet in context.
 import { draftAllAnswers } from '@/lib/answer/generate';
 import { writeAnswersToWorkbook } from '@/lib/structure/writeback';
 import type { FillJob } from '@/lib/types';
@@ -69,13 +72,12 @@ export async function planFillJob(id: string): Promise<FillJob> {
     const buffer = Buffer.from(job.original_xlsx_b64, 'base64');
     const plan = await detectStructure(buffer);
     const all = extractAllQuestions(buffer, plan);
-    const { unanswered } = partitionQuestions(all);
 
     const { data: updated, error: updErr } = await supabase
       .from('fill_jobs')
       .update({
         structure_plan: plan,
-        questions: unanswered,
+        questions: all,
         status: 'ready_to_generate',
         updated_at: new Date().toISOString(),
       })
@@ -115,8 +117,11 @@ export async function generateFillJob(id: string): Promise<FillJob> {
     .eq('id', id);
 
   try {
-    const questions = (job.questions || []) as FillJob['questions'];
-    const answers = await draftAllAnswers(questions);
+    const allQuestions = (job.questions || []) as FillJob['questions'];
+    // Only run Claude on rows that don't already have a human answer —
+    // pre-answered rows are stored on the job for UI context only.
+    const { unanswered } = partitionQuestions(allQuestions);
+    const answers = await draftAllAnswers(unanswered);
 
     const { data: updated, error: updErr } = await supabase
       .from('fill_jobs')

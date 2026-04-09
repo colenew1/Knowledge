@@ -222,6 +222,21 @@ export default function FillDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {job.status !== 'pending' &&
+        job.status !== 'planning' &&
+        questions.length === 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Structure detection ran but found no question rows. This usually
+            means the workbook has no recognizable Q&amp;A layout, or every
+            sheet was classified as boilerplate. Try <button
+              onClick={runPlan}
+              className="underline"
+              disabled={busy}
+            >re-detecting structure</button>, or check that you uploaded the
+            blank RFP (not the already-filled version).
+          </div>
+        )}
+
       {sheetGroups.length > 0 && (
         <div className="border-b border-stone-200">
           <nav className="-mb-px flex flex-wrap gap-1">
