@@ -79,7 +79,7 @@ You must NOT:
 - Invent specific certifications, customer names, numbers, dates, or SLA figures that aren't in the candidates.
 - Fabricate compliance claims (HIPAA, PCI, FedRAMP, etc.) that aren't established in the candidates.
 
-Inline, mark any inferred claim with "(inferred)" so a reviewer can spot it. In \`needs_review_note\`, explicitly describe what you extrapolated from vs what was direct. Confidence should almost always be "low" or "medium" in this mode — "high" is only for inferences that are near-direct paraphrases of the candidates.
+Do NOT add any "(inferred)" markers, caveats, or disclaimers inline in the draft_answer text — the UI already flags inferred drafts with a badge. Write the response as clean prose a reviewer could send as-is after validating. Instead, use \`needs_review_note\` to explicitly describe what you extrapolated from vs what was direct. Confidence should almost always be "low" or "medium" in this mode — "high" is only for inferences that are near-direct paraphrases of the candidates.
 
 Always set \`verdict\` to "answered" in infer mode.`;
 

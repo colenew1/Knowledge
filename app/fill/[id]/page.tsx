@@ -315,6 +315,10 @@ export default function FillDetailPage({ params }: { params: Promise<{ id: strin
       )}
 
       {activeGroup && (
+        <SheetLegend rows={activeGroup.rows} answerById={answerById} />
+      )}
+
+      {activeGroup && (
         <div className="space-y-3">
           {activeGroup.rows.map((q) => {
             const draft = answerById.get(q.id);
@@ -330,6 +334,128 @@ export default function FillDetailPage({ params }: { params: Promise<{ id: strin
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Per-sheet legend: shows what each row-border color means along with a
+ * count for this sheet specifically, so reviewers know how much is still
+ * outstanding on the tab they're looking at.
+ */
+function SheetLegend({
+  rows,
+  answerById,
+}: {
+  rows: ExtractedQuestion[];
+  answerById: Map<string, DraftAnswer>;
+}) {
+  const counts = useMemo(() => {
+    let preAnswered = 0;
+    let high = 0;
+    let edited = 0;
+    let inferred = 0;
+    let noInfo = 0;
+    let review = 0; // medium/low confidence strict drafts
+    let notDrafted = 0;
+    for (const q of rows) {
+      if (q.existing_answer) {
+        preAnswered++;
+        continue;
+      }
+      const d = answerById.get(q.id);
+      if (!d) {
+        notDrafted++;
+        continue;
+      }
+      if (d.verdict === 'no_info') noInfo++;
+      else if (d.mode === 'infer') inferred++;
+      else if (d.edited) edited++;
+      else if (d.confidence === 'high') high++;
+      else review++;
+    }
+    return {
+      preAnswered,
+      high,
+      edited,
+      inferred,
+      noInfo,
+      review,
+      notDrafted,
+      total: rows.length,
+    };
+  }, [rows, answerById]);
+
+  const items: Array<{
+    label: string;
+    count: number;
+    swatch: string;
+    desc: string;
+  }> = [
+    {
+      label: 'High confidence',
+      count: counts.high,
+      swatch: 'bg-emerald-400',
+      desc: 'Grounded directly in KB citations',
+    },
+    {
+      label: 'Needs review',
+      count: counts.review,
+      swatch: 'bg-stone-300',
+      desc: 'Medium / low confidence — double-check before sending',
+    },
+    {
+      label: 'Inferred',
+      count: counts.inferred,
+      swatch: 'bg-amber-400',
+      desc: 'Extrapolated from related material — must be validated',
+    },
+    {
+      label: 'Edited',
+      count: counts.edited,
+      swatch: 'bg-blue-400',
+      desc: 'Hand-edited by a reviewer',
+    },
+    {
+      label: 'No match',
+      count: counts.noInfo,
+      swatch: 'bg-red-400',
+      desc: 'KB has no direct answer — use Try inference or type manually',
+    },
+    {
+      label: 'Pre-answered',
+      count: counts.preAnswered,
+      swatch: 'bg-stone-200 border border-stone-300',
+      desc: 'Already filled in the source file — read only',
+    },
+    {
+      label: 'Not drafted',
+      count: counts.notDrafted,
+      swatch: 'bg-white border border-dashed border-stone-400',
+      desc: 'Click Generate drafts in the header',
+    },
+  ].filter((i) => i.count > 0);
+
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <span className="font-medium text-stone-700">
+          {counts.total} row{counts.total === 1 ? '' : 's'} on this sheet
+        </span>
+        {items.map((it) => (
+          <div
+            key={it.label}
+            className="flex items-center gap-1.5"
+            title={it.desc}
+          >
+            <span className={`h-3 w-3 rounded-sm ${it.swatch}`} />
+            <span className="text-stone-600">
+              {it.label}
+              <span className="ml-1 font-medium text-stone-800">{it.count}</span>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
