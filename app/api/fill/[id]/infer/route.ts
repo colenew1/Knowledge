@@ -24,6 +24,7 @@ export async function POST(
   const { id } = await params;
   const body = await req.json();
   const questionId = String(body?.question_id || '').trim();
+  const preview = Boolean(body?.preview);
   if (!questionId) {
     return NextResponse.json(
       { error: 'question_id is required' },
@@ -54,6 +55,12 @@ export async function POST(
   try {
     const shortlist = await retrieveShortlist(question.question, 12);
     const draft = await draftAnswerWithCandidates(question, shortlist, 'infer');
+
+    // Preview mode: return the draft without touching the stored job. The
+    // client then shows a preview card with Confirm/Discard controls.
+    if (preview) {
+      return NextResponse.json({ draft });
+    }
 
     const answers = (job.answers || []) as DraftAnswer[];
     const idx = answers.findIndex((a) => a.question_id === questionId);
