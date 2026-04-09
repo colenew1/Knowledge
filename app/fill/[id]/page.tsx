@@ -183,15 +183,17 @@ export default function FillDetailPage({ params }: { params: Promise<{ id: strin
           <div className="text-sm text-red-600">{job.error_message}</div>
         )}
         <div className="ml-auto flex gap-2">
-          {(job.status === 'pending' || job.status === 'error') && (
-            <button
-              onClick={runPlan}
-              disabled={busy}
-              className="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {busy ? 'Working…' : 'Detect structure'}
-            </button>
-          )}
+          <button
+            onClick={runPlan}
+            disabled={busy}
+            className="rounded border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+          >
+            {busy
+              ? 'Working…'
+              : job.structure_plan
+                ? 'Re-detect structure'
+                : 'Detect structure'}
+          </button>
           {(job.status === 'ready_to_generate' || job.status === 'ready') && (
             <button
               onClick={runGenerate}
@@ -220,6 +222,53 @@ export default function FillDetailPage({ params }: { params: Promise<{ id: strin
         <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {job.structure_plan && (
+        <details className="rounded-lg border border-stone-200 bg-white p-4 text-sm">
+          <summary className="cursor-pointer font-medium text-stone-700">
+            Structure detection results ({job.structure_plan.sheets.length} sheets)
+          </summary>
+          <div className="mt-3 space-y-2">
+            {job.structure_plan.sheets.map((s) => (
+              <div
+                key={s.sheet}
+                className="rounded border border-stone-100 bg-stone-50 p-2 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-stone-800">{s.sheet}</span>
+                  <span
+                    className={
+                      s.is_qa_sheet
+                        ? 'rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-700'
+                        : 'rounded border border-stone-300 bg-white px-2 py-0.5 text-stone-500'
+                    }
+                  >
+                    {s.is_qa_sheet ? 'Q&A sheet' : 'skipped'}
+                  </span>
+                </div>
+                {!s.is_qa_sheet && s.reason && (
+                  <div className="mt-1 text-stone-500">Reason: {s.reason}</div>
+                )}
+                {s.is_qa_sheet && s.regions.length > 0 && (
+                  <ul className="mt-1 space-y-0.5 text-stone-600">
+                    {s.regions.map((r, i) => (
+                      <li key={i}>
+                        {r.section} — question col {r.question_col}, answer col{' '}
+                        {r.answer_col}, rows {r.start_row}-{r.end_row}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {s.is_qa_sheet && s.regions.length === 0 && (
+                  <div className="mt-1 text-amber-700">
+                    Marked as Q&A but no regions detected.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {job.status !== 'pending' &&
