@@ -17,11 +17,14 @@ import type {
   AnswerMode,
   AnswerVerdict,
   Citation,
+  ConsideredCandidate,
   DraftAnswer,
   ExtractedQuestion,
 } from '@/lib/types';
 
-const MAX_TOKENS = 1200;
+// Bumped from 1200 → 3000 so long grounded responses (especially in infer
+// mode where we may cite multiple candidates) aren't truncated mid-sentence.
+const MAX_TOKENS = 3000;
 
 type RawResponse = {
   verdict?: AnswerVerdict;
@@ -131,7 +134,7 @@ function escapeXml(s: string): string {
 export async function draftAnswer(
   question: ExtractedQuestion
 ): Promise<DraftAnswer> {
-  const shortlist = await retrieveShortlist(question.question, 12);
+  const shortlist = await retrieveShortlist(question.question, 20);
   return draftAnswerWithCandidates(question, shortlist);
 }
 
@@ -164,22 +167,35 @@ export async function draftAnswerWithCandidates(
 
     const parsed = parseJsonResponse<RawResponse>(message);
 
+    const usedIdxSet = new Set(parsed.used_candidate_indexes || []);
+
+    const toCitation = (c: ScoredPair): Citation => ({
+      source_id: c.pair.source_id,
+      source_title: c.source_title,
+      section: c.pair.section,
+      question: c.pair.question,
+      answer: c.pair.answer,
+    });
+
     const citations: Citation[] = (parsed.used_candidate_indexes || [])
       .map((idx) => candidates[idx])
       .filter((c): c is ScoredPair => Boolean(c))
-      .map((c) => ({
-        source_id: c.pair.source_id,
-        source_title: c.source_title,
-        section: c.pair.section,
-        question: c.pair.question,
-        answer: c.pair.answer,
-      }));
+      .map(toCitation);
+
+    // Everything that was retrieved but not chosen — surfaced in the UI
+    // under "Other considered sources" so reviewers can see what else
+    // the retriever thought was relevant.
+    const other_candidates: ConsideredCandidate[] = candidates
+      .map((c, idx) => ({ c, idx }))
+      .filter(({ idx }) => !usedIdxSet.has(idx))
+      .map(({ c }) => ({ ...toCitation(c), score: c.score }));
 
     return {
       question_id: question.id,
       draft_answer: parsed.draft_answer,
       confidence: parsed.confidence,
       citations,
+      other_candidates,
       needs_review_note: parsed.needs_review_note,
       verdict: parsed.verdict ?? 'answered',
       mode,

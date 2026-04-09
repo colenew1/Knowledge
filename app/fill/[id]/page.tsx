@@ -497,6 +497,7 @@ function EditableRow({
         ...(data.draft as DraftAnswer),
         confidence: preview.confidence,
         citations: preview.citations,
+        other_candidates: preview.other_candidates,
         needs_review_note: preview.needs_review_note,
         mode: 'infer',
         verdict: 'answered',
@@ -557,7 +558,18 @@ function EditableRow({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onBlur={handleBlur}
-            rows={Math.max(3, Math.min(10, text.split('\n').length + 1))}
+            rows={Math.max(
+              3,
+              Math.min(
+                40,
+                text
+                  .split('\n')
+                  .reduce(
+                    (n, line) => n + Math.max(1, Math.ceil(line.length / 80)),
+                    0
+                  ) + 1
+              )
+            )}
             className="mt-2 w-full rounded border border-stone-300 bg-white p-2 text-sm text-stone-800 focus:border-stone-500 focus:outline-none"
             placeholder="Draft answer — edits save automatically when you click away."
           />
@@ -615,26 +627,61 @@ function EditableRow({
                 </button>
               </div>
               {preview.citations.length > 0 && (
-                <details className="mt-2 text-[11px] text-stone-600">
+                <details className="mt-2 text-[11px] text-stone-600" open>
                   <summary className="cursor-pointer">
                     {preview.citations.length} citation
-                    {preview.citations.length === 1 ? '' : 's'}
+                    {preview.citations.length === 1 ? '' : 's'} used
                   </summary>
-                  <ul className="mt-2 space-y-1">
+                  <ul className="mt-2 space-y-2">
                     {preview.citations.map((c, i) => (
-                      <li key={i} className="rounded bg-white p-2">
-                        <div className="font-medium text-stone-700">
+                      <li
+                        key={i}
+                        className="rounded border border-emerald-100 bg-white p-2"
+                      >
+                        <div className="font-medium text-stone-800">
                           {c.source_title}
                           {c.section ? ` — ${c.section}` : ''}
                         </div>
                         {shouldShowCitationQuestion(c) && (
-                          <div className="text-stone-500">{c.question}</div>
+                          <div className="mt-1 whitespace-pre-wrap text-stone-700">
+                            {c.question}
+                          </div>
                         )}
+                        <div className="mt-1 whitespace-pre-wrap text-stone-600">
+                          {c.answer}
+                        </div>
                       </li>
                     ))}
                   </ul>
                 </details>
               )}
+              {preview.other_candidates &&
+                preview.other_candidates.length > 0 && (
+                  <details className="mt-2 text-[11px] text-stone-600">
+                    <summary className="cursor-pointer">
+                      {preview.other_candidates.length} other considered source
+                      {preview.other_candidates.length === 1 ? '' : 's'}
+                    </summary>
+                    <ul className="mt-2 space-y-2">
+                      {preview.other_candidates.map((c, i) => (
+                        <li key={i} className="rounded bg-white p-2">
+                          <div className="font-medium text-stone-700">
+                            {c.source_title}
+                            {c.section ? ` — ${c.section}` : ''}
+                          </div>
+                          {shouldShowCitationQuestion(c) && (
+                            <div className="mt-1 whitespace-pre-wrap text-stone-600">
+                              {c.question}
+                            </div>
+                          )}
+                          <div className="mt-1 whitespace-pre-wrap text-stone-500">
+                            {c.answer}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
             </div>
           )}
 
@@ -648,23 +695,62 @@ function EditableRow({
             <details className="mt-2 text-[11px] text-stone-600">
               <summary className="cursor-pointer">
                 {draft.citations.length} citation
-                {draft.citations.length === 1 ? '' : 's'}
+                {draft.citations.length === 1 ? '' : 's'} used
               </summary>
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-2 space-y-2">
                 {draft.citations.map((c, i) => (
-                  <li key={i} className="rounded border border-stone-100 bg-stone-50 p-2">
-                    <div className="font-medium text-stone-700">
+                  <li
+                    key={i}
+                    className="rounded border border-emerald-100 bg-emerald-50/50 p-2"
+                  >
+                    <div className="font-medium text-stone-800">
                       {c.source_title}
                       {c.section ? ` — ${c.section}` : ''}
                     </div>
                     {shouldShowCitationQuestion(c) && (
-                      <div className="text-stone-500">{c.question}</div>
+                      <div className="mt-1 whitespace-pre-wrap text-stone-700">
+                        {c.question}
+                      </div>
                     )}
+                    <div className="mt-1 whitespace-pre-wrap text-stone-600">
+                      {c.answer}
+                    </div>
                   </li>
                 ))}
               </ul>
             </details>
           )}
+          {draft.other_candidates &&
+            draft.other_candidates.length > 0 &&
+            !preview && (
+              <details className="mt-2 text-[11px] text-stone-600">
+                <summary className="cursor-pointer">
+                  {draft.other_candidates.length} other considered source
+                  {draft.other_candidates.length === 1 ? '' : 's'}
+                </summary>
+                <ul className="mt-2 space-y-2">
+                  {draft.other_candidates.map((c, i) => (
+                    <li
+                      key={i}
+                      className="rounded border border-stone-100 bg-stone-50 p-2"
+                    >
+                      <div className="font-medium text-stone-700">
+                        {c.source_title}
+                        {c.section ? ` — ${c.section}` : ''}
+                      </div>
+                      {shouldShowCitationQuestion(c) && (
+                        <div className="mt-1 whitespace-pre-wrap text-stone-600">
+                          {c.question}
+                        </div>
+                      )}
+                      <div className="mt-1 whitespace-pre-wrap text-stone-500">
+                        {c.answer}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
         </div>
       </div>
     </div>

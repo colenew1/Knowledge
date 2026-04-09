@@ -180,22 +180,55 @@ export default function AskPage() {
             <details className="mt-4 text-xs text-stone-600" open>
               <summary className="cursor-pointer">
                 {draft.citations.length} citation
-                {draft.citations.length === 1 ? '' : 's'}
+                {draft.citations.length === 1 ? '' : 's'} used
               </summary>
               <ul className="mt-2 space-y-2">
                 {draft.citations.map((c, i) => (
                   <li
                     key={i}
-                    className="rounded border border-stone-100 bg-stone-50 p-2"
+                    className="rounded border border-emerald-100 bg-emerald-50/50 p-3"
+                  >
+                    <div className="font-medium text-stone-800">
+                      {c.source_title}
+                      {c.section ? ` — ${c.section}` : ''}
+                    </div>
+                    {shouldShowCitationQuestion(c) && (
+                      <div className="mt-1 whitespace-pre-wrap text-stone-700">
+                        {c.question}
+                      </div>
+                    )}
+                    <div className="mt-1 whitespace-pre-wrap text-stone-600">
+                      {c.answer}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {draft.other_candidates && draft.other_candidates.length > 0 && (
+            <details className="mt-3 text-xs text-stone-600">
+              <summary className="cursor-pointer">
+                {draft.other_candidates.length} other considered source
+                {draft.other_candidates.length === 1 ? '' : 's'}
+              </summary>
+              <ul className="mt-2 space-y-2">
+                {draft.other_candidates.map((c, i) => (
+                  <li
+                    key={i}
+                    className="rounded border border-stone-100 bg-stone-50 p-3"
                   >
                     <div className="font-medium text-stone-700">
                       {c.source_title}
                       {c.section ? ` — ${c.section}` : ''}
                     </div>
                     {shouldShowCitationQuestion(c) && (
-                      <div className="text-stone-600">{c.question}</div>
+                      <div className="mt-1 whitespace-pre-wrap text-stone-600">
+                        {c.question}
+                      </div>
                     )}
-                    <div className="mt-1 text-stone-500">{c.answer}</div>
+                    <div className="mt-1 whitespace-pre-wrap text-stone-500">
+                      {c.answer}
+                    </div>
                   </li>
                 ))}
               </ul>

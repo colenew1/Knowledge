@@ -77,9 +77,9 @@ export default function KbPage() {
       <section>
         <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
         <p className="mt-2 text-sm text-stone-600">
-          Upload completed xlsx spreadsheets or Word (.docx) past responses.
-          We detect the structure, extract Q&amp;A pairs, and index them for
-          retrieval.
+          Upload completed xlsx spreadsheets, Word (.docx) past responses,
+          or PDF policies / SLAs / whitepapers. We detect the structure,
+          extract or synthesize Q&amp;A pairs, and index them for retrieval.
         </p>
       </section>
 
@@ -116,11 +116,11 @@ export default function KbPage() {
             </label>
           </div>
           <label className="block text-sm">
-            <span className="text-stone-700">File (.xlsx or .docx)</span>
+            <span className="text-stone-700">File (.xlsx, .docx, or .pdf)</span>
             <input
               id="kb-file"
               type="file"
-              accept=".xlsx,.docx"
+              accept=".xlsx,.docx,.pdf"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               required
               className="mt-1 block w-full text-sm"
@@ -154,7 +154,7 @@ export default function KbPage() {
           <p className="mt-4 text-sm text-stone-500">Loading…</p>
         ) : sources.length === 0 ? (
           <p className="mt-4 text-sm text-stone-500">
-            No sources yet. Ingest your first xlsx above.
+            No sources yet. Ingest your first file above.
           </p>
         ) : (
           <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const shortlist = await retrieveShortlist(question, 12);
+    const shortlist = await retrieveShortlist(question, 20);
     const stubQuestion: ExtractedQuestion = {
       id: 'adhoc',
       sheet: '',

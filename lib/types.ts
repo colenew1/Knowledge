@@ -94,6 +94,15 @@ export type Citation = {
 };
 
 /**
+ * A KB pair that was retrieved and sent to Claude as a candidate but which
+ * Claude did not select as a direct source for the draft. Surfaced in the
+ * UI so reviewers can see other potentially relevant material.
+ */
+export type ConsideredCandidate = Citation & {
+  score?: number;
+};
+
+/**
  * Answer generation mode.
  * - `strict` — only answer if the candidates cover the question. Otherwise
  *   return `verdict: 'no_info'` so the UI can offer to fall back to infer.
@@ -109,6 +118,8 @@ export type DraftAnswer = {
   draft_answer: string;
   confidence: 'high' | 'medium' | 'low';
   citations: Citation[];
+  /** Other KB pairs that were shortlisted but not chosen by Claude. */
+  other_candidates?: ConsideredCandidate[];
   needs_review_note?: string;
   /** Only populated by the ask endpoint. Fill-job drafts leave this undefined. */
   verdict?: AnswerVerdict;
