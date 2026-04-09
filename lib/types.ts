@@ -93,12 +93,29 @@ export type Citation = {
   answer: string;
 };
 
+/**
+ * Answer generation mode.
+ * - `strict` — only answer if the candidates cover the question. Otherwise
+ *   return `verdict: 'no_info'` so the UI can offer to fall back to infer.
+ * - `infer`  — allowed to combine/extrapolate from related KB material. Must
+ *   flag inferred claims inline and cite the sources it drew from.
+ */
+export type AnswerMode = 'strict' | 'infer';
+
+export type AnswerVerdict = 'answered' | 'no_info';
+
 export type DraftAnswer = {
   question_id: string;
   draft_answer: string;
   confidence: 'high' | 'medium' | 'low';
   citations: Citation[];
   needs_review_note?: string;
+  /** Only populated by the ask endpoint. Fill-job drafts leave this undefined. */
+  verdict?: AnswerVerdict;
+  /** Echoes the mode the draft was produced under (ask endpoint only). */
+  mode?: AnswerMode;
+  /** True if a reviewer has hand-edited this draft via the review workspace. */
+  edited?: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

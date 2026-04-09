@@ -19,10 +19,31 @@
  *   rules so we can't verify post-write.
  */
 
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type { DraftAnswer, ExtractedQuestion } from '@/lib/types';
 
 const REVIEW_COL_HEADER = 'AI Review Notes';
+
+/**
+ * Style hint for answer cells we write back — wrap text, align top, so long
+ * drafted paragraphs don't overflow the cell visually. We don't touch font,
+ * fill, or border, which lets the original sheet's header/body styling shine
+ * through unchanged in other columns.
+ */
+const ANSWER_CELL_STYLE = {
+  alignment: { wrapText: true, vertical: 'top', horizontal: 'left' },
+};
+
+const REVIEW_HEADER_STYLE = {
+  font: { bold: true, color: { rgb: '475569' } },
+  fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } },
+  alignment: { wrapText: true, vertical: 'center', horizontal: 'left' },
+};
+
+const REVIEW_BODY_STYLE = {
+  font: { color: { rgb: '475569' } },
+  alignment: { wrapText: true, vertical: 'top', horizontal: 'left' },
+};
 
 /**
  * Write answers back into the workbook and return a fresh xlsx buffer.
@@ -32,7 +53,10 @@ export function writeAnswersToWorkbook(
   questions: ExtractedQuestion[],
   answers: DraftAnswer[]
 ): Buffer {
-  const wb = XLSX.read(originalBuffer, { type: 'buffer' });
+  // cellStyles: true makes xlsx-js-style carry the original style tree through
+  // the read → mutate → write round-trip, so we preserve the source file's
+  // formatting in every cell we don't explicitly touch.
+  const wb = XLSX.read(originalBuffer, { type: 'buffer', cellStyles: true });
 
   const answerById = new Map(answers.map((a) => [a.question_id, a]));
 
@@ -61,9 +85,19 @@ export function writeAnswersToWorkbook(
     // Add the header cell for the review column.
     const headerRow = Math.max(0, range.s.r);
     const headerAddr = XLSX.utils.encode_cell({ r: headerRow, c: reviewCol });
-    if (!sheet[headerAddr]) {
-      sheet[headerAddr] = { t: 's', v: REVIEW_COL_HEADER, w: REVIEW_COL_HEADER };
-    }
+    sheet[headerAddr] = {
+      t: 's',
+      v: REVIEW_COL_HEADER,
+      w: REVIEW_COL_HEADER,
+      s: REVIEW_HEADER_STYLE,
+    };
+
+    // Widen the review column so reviewers can actually read the notes.
+    // Preserve existing column widths and only touch the new review column.
+    if (!sheet['!cols']) sheet['!cols'] = [];
+    const cols = sheet['!cols'] as Array<{ wch?: number } | undefined>;
+    while (cols.length <= reviewCol) cols.push(undefined);
+    cols[reviewCol] = { wch: 60 };
 
     for (const q of sheetQuestions) {
       // Never overwrite an existing human-filled answer.
@@ -76,10 +110,19 @@ export function writeAnswersToWorkbook(
         r: q.answer_row,
         c: q.answer_col,
       });
+      // Preserve the original cell's style if present so header fills, borders,
+      // and fonts from the source sheet survive the round-trip. We only layer
+      // our wrap-text alignment on top.
+      const existingAnswerCell = sheet[answerAddr];
+      const mergedAnswerStyle = {
+        ...(existingAnswerCell?.s ?? {}),
+        ...ANSWER_CELL_STYLE,
+      };
       sheet[answerAddr] = {
         t: 's',
         v: draft.draft_answer,
         w: draft.draft_answer,
+        s: mergedAnswerStyle,
       };
 
       // Helper review note in the adjacent column on the same row.
@@ -98,7 +141,12 @@ export function writeAnswersToWorkbook(
         );
       }
       const note = noteParts.join(' · ');
-      sheet[reviewAddr] = { t: 's', v: note, w: note };
+      sheet[reviewAddr] = {
+        t: 's',
+        v: note,
+        w: note,
+        s: REVIEW_BODY_STYLE,
+      };
     }
 
     // Update the sheet range so writers/readers see the new cells.

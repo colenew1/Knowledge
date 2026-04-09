@@ -13,11 +13,18 @@
 
 import { anthropic, CLAUDE_MODEL, parseJsonResponse } from '@/lib/anthropic';
 import { retrieveShortlist, type ScoredPair } from './retrieve';
-import type { Citation, DraftAnswer, ExtractedQuestion } from '@/lib/types';
+import type {
+  AnswerMode,
+  AnswerVerdict,
+  Citation,
+  DraftAnswer,
+  ExtractedQuestion,
+} from '@/lib/types';
 
 const MAX_TOKENS = 1200;
 
 type RawResponse = {
+  verdict?: AnswerVerdict;
   draft_answer: string;
   used_candidate_indexes: number[];
   confidence: 'high' | 'medium' | 'low';
@@ -28,7 +35,8 @@ function buildPrompt(
   section: string,
   question: string,
   candidates: ScoredPair[],
-  allowedValues?: string[]
+  allowedValues?: string[],
+  mode: AnswerMode = 'strict'
 ): string {
   const candidateBlocks = candidates
     .map(
@@ -47,13 +55,38 @@ function buildPrompt(
         .join(', ')}\n</allowed_values>\n`
     : '';
 
+  const modeBlock =
+    mode === 'strict'
+      ? `## Mode: STRICT
+
+Use ONLY information directly present in the candidates. Do not invent facts, certifications, compliance claims, dates, numbers, or product capabilities that are not in the candidates. Do not extrapolate or combine unrelated material.
+
+If the candidates do not meaningfully address the new question (no direct coverage, only tangential keyword overlap), set \`verdict\` to "no_info", leave \`draft_answer\` as a short one-sentence acknowledgement like "No prior response in the knowledge base covers this question.", set confidence to "low", and leave \`used_candidate_indexes\` empty. Do NOT try to piece something together in strict mode — that's what infer mode is for.
+
+Otherwise set \`verdict\` to "answered" and draft the grounded response.`
+      : `## Mode: INFER
+
+There is no direct answer in the knowledge base for this question, and the user has explicitly asked you to make a best-effort inference from related material. You are allowed to:
+
+- Combine information from multiple candidates that each cover part of the question.
+- Generalize from related capabilities (e.g. if KB covers SOC2, you can reason about adjacent compliance frameworks the KB mentions).
+- Extrapolate cautiously from documented policies and architectural patterns.
+
+You must NOT:
+- Invent specific certifications, customer names, numbers, dates, or SLA figures that aren't in the candidates.
+- Fabricate compliance claims (HIPAA, PCI, FedRAMP, etc.) that aren't established in the candidates.
+
+Inline, mark any inferred claim with "(inferred)" so a reviewer can spot it. In \`needs_review_note\`, explicitly describe what you extrapolated from vs what was direct. Confidence should almost always be "low" or "medium" in this mode — "high" is only for inferences that are near-direct paraphrases of the candidates.
+
+Always set \`verdict\` to "answered" in infer mode.`;
+
   return `You are drafting a vendor response for AmplifAI to a prospect RFP or security questionnaire.
 
 AmplifAI is an AI-powered contact center performance enablement platform. It provides post-interaction automated QA, AI coaching, performance management, gamification, and speech/sentiment analytics. AmplifAI does NOT provide real-time agent assist.
 
-Your job: draft a single vendor response to NEW_QUESTION, grounded in the CANDIDATE prior Q&A pairs retrieved from AmplifAI's past RFP responses and security questionnaires. Use ONLY information from the candidates — do not invent facts, certifications, compliance claims, dates, numbers, or product capabilities that are not in the candidates.
+Your job: draft a single vendor response to NEW_QUESTION, using the CANDIDATE prior Q&A pairs retrieved from AmplifAI's past RFP responses and security questionnaires.
 
-If the candidates don't cover the question well enough, say so honestly: set confidence to "low" and write a \`needs_review_note\` explaining what's missing. Never fabricate security, compliance, or certification claims.
+${modeBlock}
 
 <new_question>
   <section>${escapeXml(section)}</section>
@@ -64,7 +97,7 @@ ${allowedBlock}
 ${candidateBlocks || '(no candidates — this question has no prior answer in the knowledge base)'}
 </candidates>
 
-Instructions:
+Common instructions:
 1. Identify which candidates are actually relevant to the new question (not just sharing keywords).
 2. Draft a concise vendor response (2-5 sentences) in a professional tone. Write as AmplifAI speaking directly to the prospect. No greeting, no sign-off.
 3. Record the candidate indexes you used in \`used_candidate_indexes\`.
@@ -73,10 +106,11 @@ Instructions:
    - "medium" — candidates partially answer it; you had to generalize.
    - "low"    — candidates don't really cover it; you're guessing OR deliberately declining. Include a needs_review_note.
 5. If allowed_values is specified, draft_answer must exactly match one of them.
-6. No personalization tokens. Do not name other AmplifAI customers.
+6. No personalization tokens. Do not name other AmplifAI customers. Never fabricate security, compliance, or certification claims.
 
 Respond with ONLY this JSON — no preamble, no markdown code fences:
 {
+  "verdict": "answered" | "no_info",
   "draft_answer": "...",
   "used_candidate_indexes": [0, 2],
   "confidence": "high" | "medium" | "low",
@@ -108,14 +142,16 @@ export async function draftAnswer(
  */
 export async function draftAnswerWithCandidates(
   question: ExtractedQuestion,
-  candidates: ScoredPair[]
+  candidates: ScoredPair[],
+  mode: AnswerMode = 'strict'
 ): Promise<DraftAnswer> {
   const client = anthropic();
   const prompt = buildPrompt(
     question.section,
     question.question,
     candidates,
-    question.allowed_values
+    question.allowed_values,
+    mode
   );
 
   try {
@@ -145,6 +181,8 @@ export async function draftAnswerWithCandidates(
       confidence: parsed.confidence,
       citations,
       needs_review_note: parsed.needs_review_note,
+      verdict: parsed.verdict ?? 'answered',
+      mode,
     };
   } catch (err) {
     return {
@@ -156,6 +194,8 @@ export async function draftAnswerWithCandidates(
         err instanceof Error
           ? `Generation error: ${err.message}`
           : 'Generation error',
+      verdict: 'no_info',
+      mode,
     };
   }
 }

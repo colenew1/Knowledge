@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { draftAnswerWithCandidates } from '@/lib/answer/generate';
 import { retrieveShortlist } from '@/lib/answer/retrieve';
-import type { ExtractedQuestion } from '@/lib/types';
+import type { AnswerMode, ExtractedQuestion } from '@/lib/types';
 
 export const maxDuration = 60;
 
@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const question = String(body?.question || '').trim();
   const section = String(body?.section || 'General').trim();
+  const mode: AnswerMode = body?.mode === 'infer' ? 'infer' : 'strict';
 
   if (!question) {
     return NextResponse.json(
@@ -36,7 +37,11 @@ export async function POST(request: NextRequest) {
       answer_col: 0,
       existing_answer: null,
     };
-    const draft = await draftAnswerWithCandidates(stubQuestion, shortlist);
+    const draft = await draftAnswerWithCandidates(
+      stubQuestion,
+      shortlist,
+      mode
+    );
     return NextResponse.json({ draft, candidates: shortlist.length });
   } catch (err) {
     return NextResponse.json(

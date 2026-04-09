@@ -14,7 +14,7 @@
  *      (we never overwrite a human answer).
  */
 
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type {
   ExtractedQuestion,
   StructurePlan,

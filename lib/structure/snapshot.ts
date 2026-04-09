@@ -8,7 +8,7 @@
  *   truncated cell values + merged ranges)
  */
 
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 export type SheetSnapshot = {
   sheet: string;
