@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { AnswerMode, DraftAnswer } from '@/lib/types';
+import { shouldShowCitationQuestion } from '@/lib/citation-helpers';
 
 const CONFIDENCE_STYLE: Record<DraftAnswer['confidence'], string> = {
   high: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -191,7 +192,9 @@ export default function AskPage() {
                       {c.source_title}
                       {c.section ? ` — ${c.section}` : ''}
                     </div>
-                    <div className="text-stone-600">{c.question}</div>
+                    {shouldShowCitationQuestion(c) && (
+                      <div className="text-stone-600">{c.question}</div>
+                    )}
                     <div className="mt-1 text-stone-500">{c.answer}</div>
                   </li>
                 ))}

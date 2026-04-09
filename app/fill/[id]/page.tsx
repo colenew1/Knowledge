@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DraftAnswer, ExtractedQuestion, FillJob } from '@/lib/types';
+import { shouldShowCitationQuestion } from '@/lib/citation-helpers';
 
 const STATUS_LABEL: Record<FillJob['status'], string> = {
   pending: 'Pending',
@@ -626,7 +627,9 @@ function EditableRow({
                           {c.source_title}
                           {c.section ? ` — ${c.section}` : ''}
                         </div>
-                        <div className="text-stone-500">{c.question}</div>
+                        {shouldShowCitationQuestion(c) && (
+                          <div className="text-stone-500">{c.question}</div>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -654,7 +657,9 @@ function EditableRow({
                       {c.source_title}
                       {c.section ? ` — ${c.section}` : ''}
                     </div>
-                    <div className="text-stone-500">{c.question}</div>
+                    {shouldShowCitationQuestion(c) && (
+                      <div className="text-stone-500">{c.question}</div>
+                    )}
                   </li>
                 ))}
               </ul>
