@@ -42,6 +42,29 @@ function looksLikeQuestion(s: string): boolean {
   return true;
 }
 
+/**
+ * Find the last row in the sheet where either the question_col OR the
+ * answer_col has content. Used to extend Claude's reported end_row when the
+ * snapshot was truncated and Claude couldn't see the real tail of the data.
+ */
+function findLastDataRow(
+  sheet: XLSX.WorkSheet,
+  region: StructureRegion
+): number {
+  const ref = sheet['!ref'];
+  if (!ref) return region.end_row;
+  const range = XLSX.utils.decode_range(ref);
+  for (let r = range.e.r; r >= region.start_row; r--) {
+    if (
+      cellText(sheet, r, region.question_col) ||
+      cellText(sheet, r, region.answer_col)
+    ) {
+      return r;
+    }
+  }
+  return region.end_row;
+}
+
 function extractFromRegion(
   sheet: XLSX.WorkSheet,
   sheetName: string,
@@ -49,7 +72,16 @@ function extractFromRegion(
 ): ExtractedQuestion[] {
   const out: ExtractedQuestion[] = [];
 
-  for (let r = region.start_row; r <= region.end_row; r++) {
+  // Extend the region to the last actual data row in the sheet. Claude's
+  // snapshot is capped at ~40 rows, so its `end_row` can be too conservative
+  // on long sheets. looksLikeQuestion() and the blank-cell check downstream
+  // keep us from picking up junk past the real tail.
+  const effectiveEnd = Math.max(
+    region.end_row,
+    findLastDataRow(sheet, region)
+  );
+
+  for (let r = region.start_row; r <= effectiveEnd; r++) {
     const question = cellText(sheet, r, region.question_col);
     if (!looksLikeQuestion(question)) continue;
 
