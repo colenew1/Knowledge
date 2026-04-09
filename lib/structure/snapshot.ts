@@ -18,6 +18,12 @@ export type SheetSnapshot = {
   cells: Array<{ r: number; c: number; v: string }>;
   /** Merged cell ranges, if any, as "A1:B2" style refs. */
   merges: string[];
+  /**
+   * Absolute column indexes that contain at least one non-empty cell within
+   * the snapshot. Used to force Claude to pick real column indexes instead of
+   * normalizing to zero when a sheet's data starts past column A.
+   */
+  populated_cols: number[];
 };
 
 const MAX_ROWS_PER_SHEET = 40;
@@ -38,7 +44,7 @@ export function snapshotWorkbook(buffer: Buffer | ArrayBuffer): SheetSnapshot[] 
 
     const ref = sheet['!ref'];
     if (!ref) {
-      out.push({ sheet: sheetName, rows: 0, cols: 0, cells: [], merges: [] });
+      out.push({ sheet: sheetName, rows: 0, cols: 0, cells: [], merges: [], populated_cols: [] });
       continue;
     }
     const range = XLSX.utils.decode_range(ref);
@@ -63,12 +69,17 @@ export function snapshotWorkbook(buffer: Buffer | ArrayBuffer): SheetSnapshot[] 
       XLSX.utils.encode_range(m)
     );
 
+    const populated_cols = Array.from(
+      new Set(cells.map((c) => c.c))
+    ).sort((a, b) => a - b);
+
     out.push({
       sheet: sheetName,
       rows: totalRows,
       cols: totalCols,
       cells,
       merges,
+      populated_cols,
     });
   }
 

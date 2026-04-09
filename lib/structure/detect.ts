@@ -29,6 +29,11 @@ ${snapshot.cells
 ${snapshot.merges.length ? snapshot.merges.join(', ') : '(none)'}
 </merged_ranges>
 
+<populated_columns>
+Absolute 0-based column indexes that contain data in this sheet: [${snapshot.populated_cols.join(', ')}]
+Every \`question_col\` and \`answer_col\` you output MUST be one of these values. Do not output 0 unless 0 is in the list above. Some sheets start at column B or later — in that case the first populated column is 1, not 0.
+</populated_columns>
+
 ## What to produce
 
 Decide whether this sheet contains vendor-answered questions. Common layouts:
@@ -57,11 +62,11 @@ Respond with ONLY this JSON, no preamble, no markdown fences:
   "regions": [
     {
       "section": "short label",
-      "question_col": 0,
-      "answer_col": 1,
-      "start_row": 5,
-      "end_row": 42,
-      "allowed_values": ["Yes", "No"]  // optional, omit if not a dropdown
+      "question_col": <pick from populated_columns>,
+      "answer_col": <pick from populated_columns>,
+      "start_row": <first row with an actual question>,
+      "end_row": <last possible data row, usually total_rows - 1>,
+      "allowed_values": ["Yes", "No"]
     }
   ]
 }`;

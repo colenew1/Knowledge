@@ -65,13 +65,43 @@ function findLastDataRow(
   return region.end_row;
 }
 
+function extractWithColumns(
+  sheet: XLSX.WorkSheet,
+  sheetName: string,
+  region: StructureRegion,
+  questionCol: number,
+  answerCol: number,
+  effectiveEnd: number
+): ExtractedQuestion[] {
+  const out: ExtractedQuestion[] = [];
+  for (let r = region.start_row; r <= effectiveEnd; r++) {
+    const question = cellText(sheet, r, questionCol);
+    if (!looksLikeQuestion(question)) continue;
+
+    const existing = cellText(sheet, r, answerCol);
+
+    const id = `${sheetName}!${region.section}!${r}_${questionCol}`;
+    out.push({
+      id,
+      sheet: sheetName,
+      section: region.section,
+      question,
+      row: r,
+      col: questionCol,
+      answer_row: r,
+      answer_col: answerCol,
+      existing_answer: existing || null,
+      allowed_values: region.allowed_values,
+    });
+  }
+  return out;
+}
+
 function extractFromRegion(
   sheet: XLSX.WorkSheet,
   sheetName: string,
   region: StructureRegion
 ): ExtractedQuestion[] {
-  const out: ExtractedQuestion[] = [];
-
   // Extend the region to the last actual data row in the sheet. Claude's
   // snapshot is capped at ~40 rows, so its `end_row` can be too conservative
   // on long sheets. looksLikeQuestion() and the blank-cell check downstream
@@ -81,28 +111,39 @@ function extractFromRegion(
     findLastDataRow(sheet, region)
   );
 
-  for (let r = region.start_row; r <= effectiveEnd; r++) {
-    const question = cellText(sheet, r, region.question_col);
-    if (!looksLikeQuestion(question)) continue;
+  // First attempt: use the columns Claude reported verbatim.
+  const primary = extractWithColumns(
+    sheet,
+    sheetName,
+    region,
+    region.question_col,
+    region.answer_col,
+    effectiveEnd
+  );
+  if (primary.length > 0) return primary;
 
-    const existing = cellText(sheet, r, region.answer_col);
-
-    const id = `${sheetName}!${region.section}!${r}_${region.question_col}`;
-    out.push({
-      id,
-      sheet: sheetName,
-      section: region.section,
-      question,
-      row: r,
-      col: region.question_col,
-      answer_row: r,
-      answer_col: region.answer_col,
-      existing_answer: existing || null,
-      allowed_values: region.allowed_values,
-    });
+  // Fallback: Claude sometimes normalizes indexes for sheets that start past
+  // column A (e.g. returns 0/1 when the real data is at columns 1/2). If the
+  // primary extraction returned nothing, try sliding the column pair by ±1
+  // and ±2 while preserving the spacing Claude gave us. The first shift that
+  // yields a meaningful number of questions wins.
+  const spacing = region.answer_col - region.question_col;
+  for (const shift of [1, 2, -1, -2]) {
+    const qCol = region.question_col + shift;
+    const aCol = qCol + spacing;
+    if (qCol < 0 || aCol < 0) continue;
+    const shifted = extractWithColumns(
+      sheet,
+      sheetName,
+      region,
+      qCol,
+      aCol,
+      effectiveEnd
+    );
+    if (shifted.length >= 3) return shifted;
   }
 
-  return out;
+  return primary;
 }
 
 /**
