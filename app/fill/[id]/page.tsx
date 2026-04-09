@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DraftAnswer, ExtractedQuestion, FillJob } from '@/lib/types';
 import { shouldShowCitationQuestion } from '@/lib/citation-helpers';
+import { HighlightedAnswer, CopyButton } from '@/app/_components/citation-ui';
 
 const STATUS_LABEL: Record<FillJob['status'], string> = {
   pending: 'Pending',
@@ -709,13 +710,16 @@ function EditableRow({
               )}
               {saving === 'idle' && 'Auto-saves on blur'}
             </span>
-            <button
-              onClick={handleTryInfer}
-              disabled={inferring}
-              className="rounded border border-stone-300 px-2 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
-            >
-              {inferring ? 'Generating…' : 'Try inference'}
-            </button>
+            <div className="flex items-center gap-2">
+              <CopyButton text={text} label="Copy" />
+              <button
+                onClick={handleTryInfer}
+                disabled={inferring}
+                className="rounded border border-stone-300 px-2 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+              >
+                {inferring ? 'Generating…' : 'Try inference'}
+              </button>
+            </div>
           </div>
 
           {preview && (
@@ -738,13 +742,18 @@ function EditableRow({
                   {preview.needs_review_note}
                 </p>
               )}
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   onClick={confirmPreview}
                   className="rounded bg-stone-900 px-3 py-1.5 text-xs font-medium text-white"
                 >
                   Confirm & apply
                 </button>
+                <CopyButton
+                  text={preview.draft_answer}
+                  label="Copy only"
+                  className="rounded border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
+                />
                 <button
                   onClick={() => setPreview(null)}
                   className="rounded border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
@@ -773,9 +782,11 @@ function EditableRow({
                             {c.question}
                           </div>
                         )}
-                        <div className="mt-1 whitespace-pre-wrap text-stone-600">
-                          {c.answer}
-                        </div>
+                        <HighlightedAnswer
+                          text={c.answer}
+                          excerpts={c.excerpts}
+                          className="mt-1 text-stone-600"
+                        />
                       </li>
                     ))}
                   </ul>
@@ -800,9 +811,11 @@ function EditableRow({
                               {c.question}
                             </div>
                           )}
-                          <div className="mt-1 whitespace-pre-wrap text-stone-500">
-                            {c.answer}
-                          </div>
+                          <HighlightedAnswer
+                            text={c.answer}
+                            excerpts={c.excerpts}
+                            className="mt-1 text-stone-500"
+                          />
                         </li>
                       ))}
                     </ul>
@@ -838,9 +851,11 @@ function EditableRow({
                         {c.question}
                       </div>
                     )}
-                    <div className="mt-1 whitespace-pre-wrap text-stone-600">
-                      {c.answer}
-                    </div>
+                    <HighlightedAnswer
+                      text={c.answer}
+                      excerpts={c.excerpts}
+                      className="mt-1 text-stone-600"
+                    />
                   </li>
                 ))}
               </ul>
@@ -869,9 +884,11 @@ function EditableRow({
                           {c.question}
                         </div>
                       )}
-                      <div className="mt-1 whitespace-pre-wrap text-stone-500">
-                        {c.answer}
-                      </div>
+                      <HighlightedAnswer
+                        text={c.answer}
+                        excerpts={c.excerpts}
+                        className="mt-1 text-stone-500"
+                      />
                     </li>
                   ))}
                 </ul>

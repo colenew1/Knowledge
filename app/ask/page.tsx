@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { AnswerMode, DraftAnswer } from '@/lib/types';
 import { shouldShowCitationQuestion } from '@/lib/citation-helpers';
+import { HighlightedAnswer, CopyButton } from '@/app/_components/citation-ui';
 
 const CONFIDENCE_STYLE: Record<DraftAnswer['confidence'], string> = {
   high: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -160,9 +161,12 @@ export default function AskPage() {
               past responses and should be verified before being sent.
             </p>
           )}
-          <p className="mt-3 whitespace-pre-wrap text-sm text-stone-800">
-            {draft.draft_answer}
-          </p>
+          <div className="mt-3 flex items-start justify-between gap-3">
+            <p className="flex-1 whitespace-pre-wrap text-sm text-stone-800">
+              {draft.draft_answer}
+            </p>
+            <CopyButton text={draft.draft_answer} label="Copy answer" />
+          </div>
           {draft.needs_review_note && (
             <p className="mt-2 text-xs text-amber-700">
               Review note: {draft.needs_review_note}
@@ -194,9 +198,11 @@ export default function AskPage() {
                         {c.question}
                       </div>
                     )}
-                    <div className="mt-1 whitespace-pre-wrap text-stone-600">
-                      {c.answer}
-                    </div>
+                    <HighlightedAnswer
+                      text={c.answer}
+                      excerpts={c.excerpts}
+                      className="mt-1 text-stone-600"
+                    />
                   </li>
                 ))}
               </ul>

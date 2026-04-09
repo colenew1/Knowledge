@@ -91,6 +91,12 @@ export type Citation = {
   section: string | null;
   question: string;
   answer: string;
+  /**
+   * Verbatim snippets from the candidate's answer that Claude actually
+   * drew from when drafting the response. Rendered as highlighted ranges
+   * inside the full answer text in the UI.
+   */
+  excerpts?: string[];
 };
 
 /**

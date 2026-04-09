@@ -26,10 +26,19 @@ import type {
 // mode where we may cite multiple candidates) aren't truncated mid-sentence.
 const MAX_TOKENS = 3000;
 
+type RawUsedCandidate = {
+  index: number;
+  /** Verbatim substrings from the candidate's prior_answer that were drawn on. */
+  excerpts?: string[];
+};
+
 type RawResponse = {
   verdict?: AnswerVerdict;
   draft_answer: string;
-  used_candidate_indexes: number[];
+  /** New, preferred shape — per-candidate excerpts for highlighting. */
+  used_candidates?: RawUsedCandidate[];
+  /** Legacy fallback. */
+  used_candidate_indexes?: number[];
   confidence: 'high' | 'medium' | 'low';
   needs_review_note?: string;
 };
@@ -64,7 +73,7 @@ function buildPrompt(
 
 Use ONLY information directly present in the candidates. Do not invent facts, certifications, compliance claims, dates, numbers, or product capabilities that are not in the candidates. Do not extrapolate or combine unrelated material.
 
-If the candidates do not meaningfully address the new question (no direct coverage, only tangential keyword overlap), set \`verdict\` to "no_info", leave \`draft_answer\` as a short one-sentence acknowledgement like "No prior response in the knowledge base covers this question.", set confidence to "low", and leave \`used_candidate_indexes\` empty. Do NOT try to piece something together in strict mode — that's what infer mode is for.
+If the candidates do not meaningfully address the new question (no direct coverage, only tangential keyword overlap), set \`verdict\` to "no_info", leave \`draft_answer\` as a short one-sentence acknowledgement like "No prior response in the knowledge base covers this question.", set confidence to "low", and leave \`used_candidates\` empty. Do NOT try to piece something together in strict mode — that's what infer mode is for.
 
 Otherwise set \`verdict\` to "answered" and draft the grounded response.`
       : `## Mode: INFER
@@ -103,7 +112,9 @@ ${candidateBlocks || '(no candidates — this question has no prior answer in th
 Common instructions:
 1. Identify which candidates are actually relevant to the new question (not just sharing keywords).
 2. Draft a concise vendor response (2-5 sentences) in a professional tone. Write as AmplifAI speaking directly to the prospect. No greeting, no sign-off.
-3. Record the candidate indexes you used in \`used_candidate_indexes\`.
+3. For each candidate you drew from, record it in \`used_candidates\` with:
+   - \`index\`: the candidate's index number.
+   - \`excerpts\`: 1-4 **exact verbatim substrings** copied character-for-character from that candidate's \`prior_answer\`. These are the specific passages you actually relied on — not paraphrases, not your own summaries. A reviewer will see these highlighted inside the full candidate text, so they must match exactly (including punctuation and capitalization). Keep each excerpt focused: a sentence or short phrase, not the whole paragraph.
 4. Set confidence:
    - "high"   — candidates directly answer the question and you can write a grounded response with zero invention.
    - "medium" — candidates partially answer it; you had to generalize.
@@ -115,7 +126,10 @@ Respond with ONLY this JSON — no preamble, no markdown code fences:
 {
   "verdict": "answered" | "no_info",
   "draft_answer": "...",
-  "used_candidate_indexes": [0, 2],
+  "used_candidates": [
+    { "index": 0, "excerpts": ["verbatim phrase from prior_answer", "another verbatim phrase"] },
+    { "index": 2, "excerpts": ["..."] }
+  ],
   "confidence": "high" | "medium" | "low",
   "needs_review_note": "optional string, omit or empty if confidence is high"
 }`;
@@ -167,20 +181,37 @@ export async function draftAnswerWithCandidates(
 
     const parsed = parseJsonResponse<RawResponse>(message);
 
-    const usedIdxSet = new Set(parsed.used_candidate_indexes || []);
+    // Prefer the new `used_candidates` shape (with excerpts); fall back to
+    // the legacy index-only array if Claude returned that instead.
+    const usedList: RawUsedCandidate[] = parsed.used_candidates?.length
+      ? parsed.used_candidates
+      : (parsed.used_candidate_indexes || []).map((index) => ({ index }));
 
-    const toCitation = (c: ScoredPair): Citation => ({
+    const excerptsByIdx = new Map<number, string[]>();
+    for (const u of usedList) {
+      if (typeof u.index !== 'number') continue;
+      excerptsByIdx.set(
+        u.index,
+        (u.excerpts || []).filter((e) => typeof e === 'string' && e.trim())
+      );
+    }
+    const usedIdxSet = new Set(excerptsByIdx.keys());
+
+    const toCitation = (c: ScoredPair, excerpts?: string[]): Citation => ({
       source_id: c.pair.source_id,
       source_title: c.source_title,
       section: c.pair.section,
       question: c.pair.question,
       answer: c.pair.answer,
+      excerpts,
     });
 
-    const citations: Citation[] = (parsed.used_candidate_indexes || [])
-      .map((idx) => candidates[idx])
-      .filter((c): c is ScoredPair => Boolean(c))
-      .map(toCitation);
+    const citations: Citation[] = Array.from(usedIdxSet)
+      .map((idx) => {
+        const c = candidates[idx];
+        return c ? toCitation(c, excerptsByIdx.get(idx)) : null;
+      })
+      .filter((c): c is Citation => Boolean(c));
 
     // Everything that was retrieved but not chosen — surfaced in the UI
     // under "Other considered sources" so reviewers can see what else
