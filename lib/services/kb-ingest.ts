@@ -1,16 +1,27 @@
 /**
  * Knowledge-base ingest service.
  *
- * Pipeline for a prior RFP upload:
+ * Two pipelines share the same kb_sources / kb_pairs storage:
+ *
+ * xlsx pipeline (past RFP spreadsheets, SIG, CAIQ):
  *   1. Create kb_sources row with a null structure_plan
  *   2. Detect structure (Claude) → update the source row
  *   3. Extract all questions, keep the ones with non-empty vendor answers
  *   4. Insert one kb_pairs row per Q&A pair (with pre-tokenized tokens)
+ *
+ * docx pipeline (past RFP Word docs, vendor questionnaires):
+ *   1. Create kb_sources row
+ *   2. Run mammoth + Claude Q&A extraction (lib/kb/docx-extract.ts)
+ *   3. Insert one kb_pairs row per extracted pair
+ *
+ * The file extension decides which pipeline runs — we do not sniff the
+ * buffer, so uploads must be named correctly.
  */
 
 import { db } from '@/lib/supabase';
 import { detectStructure } from '@/lib/structure/detect';
 import { extractAllQuestions, partitionQuestions } from '@/lib/structure/extract';
+import { extractQaPairsFromDocx } from '@/lib/kb/docx-extract';
 import { uniqueTokens } from '@/lib/answer/tokens';
 import type { KbSource } from '@/lib/types';
 
@@ -20,6 +31,10 @@ export type IngestResult = {
   pairs_saved: number;
   skipped_no_answer: number;
 };
+
+function isDocx(filename: string): boolean {
+  return filename.toLowerCase().endsWith('.docx');
+}
 
 export async function ingestKbSource(opts: {
   title: string;
@@ -45,43 +60,82 @@ export async function ingestKbSource(opts: {
     throw new Error(`Failed to create kb_source: ${createErr?.message}`);
   }
 
-  try {
-    // 2. Detect structure
-    const plan = await detectStructure(opts.buffer);
-    await supabase
-      .from('kb_sources')
-      .update({ structure_plan: plan })
-      .eq('id', sourceRow.id);
-
-    // 3. Extract and partition
-    const questions = extractAllQuestions(opts.buffer, plan);
-    const { answered } = partitionQuestions(questions);
-
-    // 4. Bulk insert Q&A pairs
-    if (answered.length > 0) {
-      const rows = answered.map((q) => ({
-        source_id: sourceRow.id,
-        section: q.section,
-        question: q.question,
-        answer: q.existing_answer!,
-        tokens: uniqueTokens(`${q.question} ${q.section}`),
-      }));
-
-      const { error: insertErr } = await supabase.from('kb_pairs').insert(rows);
-      if (insertErr) {
-        throw new Error(`Failed to insert kb_pairs: ${insertErr.message}`);
-      }
-    }
-
-    return {
-      source: { ...sourceRow, structure_plan: plan } as KbSource,
-      total_questions: questions.length,
-      pairs_saved: answered.length,
-      skipped_no_answer: questions.length - answered.length,
-    };
-  } catch (err) {
-    // Best-effort cleanup: leave the source row so the user can inspect
-    // error state, but surface the error.
-    throw err;
+  if (isDocx(opts.filename)) {
+    return ingestDocx(sourceRow, opts.buffer);
   }
+  return ingestXlsx(sourceRow, opts.buffer);
+}
+
+async function ingestXlsx(
+  sourceRow: KbSource,
+  buffer: Buffer
+): Promise<IngestResult> {
+  const supabase = db();
+
+  // 2. Detect structure
+  const plan = await detectStructure(buffer);
+  await supabase
+    .from('kb_sources')
+    .update({ structure_plan: plan })
+    .eq('id', sourceRow.id);
+
+  // 3. Extract and partition
+  const questions = extractAllQuestions(buffer, plan);
+  const { answered } = partitionQuestions(questions);
+
+  // 4. Bulk insert Q&A pairs
+  if (answered.length > 0) {
+    const rows = answered.map((q) => ({
+      source_id: sourceRow.id,
+      section: q.section,
+      question: q.question,
+      answer: q.existing_answer!,
+      tokens: uniqueTokens(`${q.question} ${q.section}`),
+    }));
+
+    const { error: insertErr } = await supabase.from('kb_pairs').insert(rows);
+    if (insertErr) {
+      throw new Error(`Failed to insert kb_pairs: ${insertErr.message}`);
+    }
+  }
+
+  return {
+    source: { ...sourceRow, structure_plan: plan } as KbSource,
+    total_questions: questions.length,
+    pairs_saved: answered.length,
+    skipped_no_answer: questions.length - answered.length,
+  };
+}
+
+async function ingestDocx(
+  sourceRow: KbSource,
+  buffer: Buffer
+): Promise<IngestResult> {
+  const supabase = db();
+
+  // Word docs don't have a structure_plan — the extraction is narrative-
+  // based, not grid-based. We leave structure_plan null on kb_sources.
+  const pairs = await extractQaPairsFromDocx(buffer);
+
+  if (pairs.length > 0) {
+    const rows = pairs.map((p) => ({
+      source_id: sourceRow.id,
+      section: p.section || 'General',
+      question: p.question,
+      answer: p.answer,
+      tokens: uniqueTokens(`${p.question} ${p.section || ''}`),
+    }));
+
+    const { error: insertErr } = await supabase.from('kb_pairs').insert(rows);
+    if (insertErr) {
+      throw new Error(`Failed to insert kb_pairs: ${insertErr.message}`);
+    }
+  }
+
+  return {
+    source: sourceRow as KbSource,
+    total_questions: pairs.length,
+    pairs_saved: pairs.length,
+    skipped_no_answer: 0,
+  };
 }
